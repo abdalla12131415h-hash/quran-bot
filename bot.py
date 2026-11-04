@@ -10,7 +10,7 @@
 
 التشغيل:
     1. أنشئ ملف .env بجانب bot.py وضع فيه سطراً بالصيغة:
-            BOT_TOKEN=توكن_البوت_الخاص_بك
+           BOT_TOKEN=توكن_البوت_الخاص_بك
        (يمكن نسخ القيمة من @BotFather، ويُفضّل عدم مشاركة الملف .env مع أي جهة).
     2. نفّذ الأمر: python bot.py
 """
@@ -21,6 +21,7 @@ import sys
 import requests
 import telebot
 from dotenv import load_dotenv
+from flask import Flask, request
 from telebot import types
 
 # تحميل المتغيّرات من ملف .env (إن وُجد) دون كتابة التوكن داخل الكود
@@ -37,11 +38,6 @@ LANGUAGE = "ar"
 RECITERS_PER_PAGE = 10
 SURAHS_PER_PAGE = 12
 
-# ترويسة لتجنب حظر الطلبات من السيرفرات الخارجية
-REQUEST_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-}
-
 bot = telebot.TeleBot(BOT_TOKEN)
 
 # تخزين مؤقت لتقليل عدد الطلبات على الواجهة
@@ -56,7 +52,6 @@ def get_reciters():
         response = requests.get(
             f"{API_BASE_URL}/reciters",
             params={"language": LANGUAGE},
-            headers=REQUEST_HEADERS,
             timeout=15,
         )
         response.raise_for_status()
@@ -71,7 +66,6 @@ def get_surahs():
         response = requests.get(
             f"{API_BASE_URL}/suwar",
             params={"language": LANGUAGE},
-            headers=REQUEST_HEADERS,
             timeout=15,
         )
         response.raise_for_status()
@@ -259,6 +253,48 @@ def handle_noop(call):
     bot.answer_callback_query(call.id)
 
 
+# ---- تطبيق الويب (Webhook) الخاص باستضافة Vercel ----
+app = Flask(__name__)
+
+
+@app.route("/", methods=["GET", "POST"])
+def webhook():
+    """نقطة استقبال تحديثات تلجرام القادمة من Vercel."""
+    if request.method == "POST":
+        if request.headers.get("content-type") == "application/json":
+            update = telebot.types.Update.de_json(request.get_data(as_text=True))
+            bot.process_new_updates([update])
+            return "OK", 200
+        return "Unsupported content type", 403
+    return "Quran bot is running", 200
+
+
+@app.route("/set_webhook", methods=["GET"])
+def set_webhook():
+    """ضبط الـ Webhook على رابط النشر (يُستدعى مرة واحدة بعد النشر)."""
+    webhook_url = os.getenv("WEBHOOK_URL")
+    if not webhook_url:
+        return "الرجاء ضبط المتغيّر WEBHOOK_URL أولاً", 400
+    bot.remove_webhook()
+    bot.set_webhook(url=webhook_url)
+    return f"تم ضبط الـ Webhook على: {webhook_url}", 200
+
+
+@app.route("/webhook_info", methods=["GET"])
+def webhook_info():
+    """عرض حالة الـ Webhook الحالية المسجّلة لدى تلجرام لتسهيل تتبّع الأخطاء."""
+    info = bot.get_webhook_info()
+    return {
+        "url": info.url,
+        "pending_update_count": info.pending_update_count,
+        "last_error_date": info.last_error_date,
+        "last_error_message": info.last_error_message,
+        "max_connections": info.max_connections,
+        "ip_address": info.ip_address,
+    }, 200
+
+
 if __name__ == "__main__":
-    print("Bot is running...")
+    # تشغيل محلي بنظام polling للتجربة فقط (على Vercel لا يُستخدم هذا المسار)
+    print("Bot is running locally with polling...")
     bot.infinity_polling()
