@@ -10,7 +10,7 @@
 
 التشغيل:
     1. أنشئ ملف .env بجانب bot.py وضع فيه سطراً بالصيغة:
-           BOT_TOKEN=توكن_البوت_الخاص_بك
+            BOT_TOKEN=توكن_البوت_الخاص_بك
        (يمكن نسخ القيمة من @BotFather، ويُفضّل عدم مشاركة الملف .env مع أي جهة).
     2. نفّذ الأمر: python bot.py
 """
@@ -37,6 +37,11 @@ LANGUAGE = "ar"
 RECITERS_PER_PAGE = 10
 SURAHS_PER_PAGE = 12
 
+# ترويسة لتجنب حظر الطلبات من السيرفرات الخارجية
+REQUEST_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+}
+
 bot = telebot.TeleBot(BOT_TOKEN)
 
 # تخزين مؤقت لتقليل عدد الطلبات على الواجهة
@@ -51,6 +56,7 @@ def get_reciters():
         response = requests.get(
             f"{API_BASE_URL}/reciters",
             params={"language": LANGUAGE},
+            headers=REQUEST_HEADERS,
             timeout=15,
         )
         response.raise_for_status()
@@ -65,6 +71,7 @@ def get_surahs():
         response = requests.get(
             f"{API_BASE_URL}/suwar",
             params={"language": LANGUAGE},
+            headers=REQUEST_HEADERS,
             timeout=15,
         )
         response.raise_for_status()
